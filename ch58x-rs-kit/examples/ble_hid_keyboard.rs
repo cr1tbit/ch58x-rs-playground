@@ -91,25 +91,7 @@ unsafe extern "C" fn passcode(_address: *mut u8, conn: u16, inputs: u8, outputs:
 
 #[qingke_rt::entry]
 fn main() -> ! {
-    // Use the same continuously polled executor as cyberlamp, avoiding its
-    // unresolved WFI/WFE wake issue. The local HAL includes the SysTick fix.
-    let executor = embassy_executor::raw::Executor::new(core::ptr::null_mut());
-    let executor: &'static embassy_executor::raw::Executor = unsafe { &*(&executor as *const _) };
-    executor.spawner().spawn(app(executor.spawner())).unwrap();
-    let mut last_log: u64 = 0;
-    loop {
-        unsafe {
-            executor.poll();
-        }
-        assert!(qingke::register::gintenr::read() & 8 != 0, "HID: IRQ off after poll");
-        let ticks = unsafe { (&*hal::pac::SYSTICK::PTR).cnt().read().bits() };
-        if ticks.wrapping_sub(last_log) >= 22_500_000 {
-            last_log = ticks;
-            unsafe {
-                log!("HID alive: tmos={} app={} AES={:#x} LLE={:#x}", TMOS_POLLS.load(Ordering::Relaxed), APP_POLLS.load(Ordering::Relaxed), gptrAESReg as usize, gptrLLEReg as usize);
-            }
-        }
-    }
+    hal::embassy::Executor::new().run(|spawner| spawner.must_spawn(app(spawner)))
 }
 
 #[qingke_rt::interrupt]

@@ -34,7 +34,7 @@ checksum = "2fd1289c04a9ea8cb22300a459a72a385d7c73d3259e2ed7dcb2af674838cfa9"
 [[package]]
 name = "ch58x"
 version = "0.4.0"
-source = "git+https://github.com/cr1tbit/ch58x-hal.git?branch=main#9af68081a0ab5dd0b841748bb771d81027f7f0d5"
+source = "git+https://github.com/cr1tbit/ch58x-hal.git?branch=main#e84b3098a65c2bc0adcac67b65444e8f00b4b6d0"
 dependencies = [
  "vcell",
 ]
@@ -42,13 +42,15 @@ dependencies = [
 [[package]]
 name = "ch58x-hal"
 version = "0.0.2"
-source = "git+https://github.com/cr1tbit/ch58x-hal.git?branch=main#9af68081a0ab5dd0b841748bb771d81027f7f0d5"
+source = "git+https://github.com/cr1tbit/ch58x-hal.git?branch=main#e84b3098a65c2bc0adcac67b65444e8f00b4b6d0"
 dependencies = [
  "ch58x",
  "critical-section",
+ "embassy-executor",
  "embassy-sync",
  "embassy-time-driver",
  "embassy-time-queue-utils",
+ "embassy-usb-driver",
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0",
  "embedded-hal-async",
@@ -203,6 +205,15 @@ checksum = "dc55c748d16908a65b166d09ce976575fb8852cf60ccd06174092b41064d8f83"
 dependencies = [
  "embassy-executor",
  "heapless",
+]
+
+[[package]]
+name = "embassy-usb-driver"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "340c5ce591ef58c6449e43f51d2c53efe1bf0bb6a40cbf80afa0d259c7d52c76"
+dependencies = [
+ "embedded-io-async",
 ]
 
 [[package]]

@@ -101,8 +101,13 @@ fn set_pwm(tmr: ch58x_hal::pac::TMR0, freq: Option<u32>, duty: u32) -> ch58x_hal
     }
 }
 
-#[embassy_executor::main(entry = "qingke_rt::entry")]
-async fn main(spawner: Spawner) -> ! {
+#[qingke_rt::entry]
+fn main() -> ! {
+    hal::embassy::Executor::new().run(|spawner| spawner.must_spawn(app_main(spawner)))
+}
+
+#[embassy_executor::task]
+async fn app_main(spawner: Spawner) -> ! {
     let mut config = hal::Config::default();
     config.low_power = true; //800uA->150uA
 

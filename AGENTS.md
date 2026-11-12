@@ -12,11 +12,11 @@ firmware built on `ch58x-rs-kit` / [ch58x-hal](https://github.com/cr1tbit/ch58x-
   - Reset after every attach (`wlink reset`) before drawing conclusions about the running
     firmware.
   - Observe a running target over UART (or USB CDC), not through the probe.
-- **Interrupts that "stay off" after an attach are this artefact.** The embassy executor keeps the
-  constant `8` in `s1` and re-enables interrupts with `csrs 0x800, s1`. Once the attach overwrites
-  `s1`, interrupts never come back on.
-- **`mstatus.MIE = 0` in the executor loop is normal.** The executor masks interrupts while it
-  polls tasks and while it sleeps in `wfi`, so a halted sample there shows MIE = 0.
+- **Interrupts that "stay off" after an attach are this artefact.** Code can keep a constant in a
+  register across a loop. embassy's `arch-riscv32` executor kept `8` in `s1` and re-enabled
+  interrupts with `csrs 0x800, s1`. Once the attach overwrote `s1`, interrupts never came back on.
+- **`mstatus.MIE = 0` in a halted sample is often normal.** Critical sections and interrupt
+  handlers run with MIE = 0. `hal::embassy::Executor` sleeps with MIE = 1.
 
 ## Reading memory
 
@@ -40,11 +40,19 @@ firmware built on `ch58x-rs-kit` / [ch58x-hal](https://github.com/cr1tbit/ch58x-
 
 ## Known runtime issues
 
-- **WFE idle can miss interrupts.** qingke-rt 0.5 turns `wfi` into `wfe`. Even with SEVONPEND
-  (set in `hal::init()`), a pending USB interrupt does not always wake the CPU, so
-  `#[embassy_executor::main]` can stall USB enumeration and BLE. Workaround: a raw executor
-  polled continuously, see `cyberlamp_fw` or ch58x-hal's `examples/usb-cdc.rs`. The CPU then
-  never sleeps.
+- **Use `hal::embassy::Executor`, not embassy-executor's `arch-riscv32`.**
+  - qingke-rt 0.5 turns `wfi` into WFE. The `arch-riscv32` executor sleeps with interrupts
+    masked, and a masked WFE only wakes on a *new* pending interrupt. One that became pending
+    just before is lost, so USB enumeration stalls (0/6 on a CH582F) and BLE can stall too.
+  - The HAL executor sleeps with interrupts enabled, and its `__pender` sets
+    `PFIC_SCTLR.SETEVENT`. QingKe has a Cortex-M-like event register, so no wake-up is lost.
+  - Entry point:
+    `#[qingke_rt::entry] fn main() -> ! { hal::embassy::Executor::new().run(|s| s.must_spawn(app_main(s))) }`.
+  - Don't enable `arch-*` features on `embassy-executor` anywhere in the build: they define a
+    second `__pender`, and linking fails.
+- **The USB interrupt fires on every SOF and NAKed token**, even when only reset, suspend and
+  transfer interrupts are enabled: about 1000/s on an idle bus, about 23000/s while the host polls
+  an IN endpoint. It wakes the CPU each time; the handler finds no flag.
 - **LR/SC atomics are broken on CH582** (`sc.w` never fails); AMO instructions are fine. Build
   for `riscv32imc-unknown-none-elf` and do not enable qingke's `unsafe-trust-wch-atomics`.
 - **Peripheral interrupt handlers** must use `#[qingke_rt::interrupt]`, otherwise they are not in
