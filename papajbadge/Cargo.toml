@@ -1,0 +1,22 @@
+[package]
+name = "papajbadge"
+version = "0.2.136"
+edition = "2021"
+license = "MIT"
+
+[lib]
+# no_std firmware library: no test harness on the target
+test = false
+
+[dependencies]
+ch58x-hal.workspace = true
+ch58x-rs-kit.workspace = true
+critical-section.workspace = true
+qingke.workspace = true
+qingke-rt.workspace = true
+embedded-hal-local.workspace = true
+embassy-executor.workspace = true
+embassy-futures.workspace = true
+embassy-sync.workspace = true
+embassy-time.workspace = true
+abc-note-stream.workspace = true

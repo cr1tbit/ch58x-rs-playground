@@ -1,4 +1,0 @@
-# No idea how to make this take the default target for the current platform and if we don't set it it gets overridden by the parent project
-[build]
-target = "aarch64-apple-darwin"
-

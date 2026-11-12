@@ -1,11 +1,20 @@
 # papajbadge-rs
 
-This repo contains firmware for papajbadge
+Rust firmware for CH582 boards, built on [ch58x-hal](https://github.com/cr1tbit/ch58x-hal)
+(a fork with fixes for qingke-rt 0.5 / embassy 0.7).
 
-It contains some nessesary mess:
- * pre-compiled openocd taken from mounriver's release (no-license)
- * vendored libs for bluetooth
- * ch58x pac - i had to patch TIM0 peripheral so it may be used for PWM output
+| Crate | Contents |
+| --- | --- |
+| `ch58x-rs-kit` | Shared library: UART logger, BLE peripheral services (NUS, current time, device info), settings storage, shift-register LED driver, fatal-error handler. `examples/` holds the PoCs (BLE HID keyboard, BLE scan/advertise tests, atomics litmus test, ...) |
+| `cyberlamp-rs` | Cyberlamp firmware (`cyberlamp_fw`) and its command protocol |
+| `artsywatch-rs` | Artsywatch firmware (`artsywatch_fw`), uses `ledface_layout` |
+| `papajbadge` | papajbadge firmware (`cebula_fw`), RTC sleep loop and tune playback |
+| `ledface_layout` | LED watch face layout format |
+
+Run firmware with `cargo run --release --bin <name>` and examples with
+`cargo run --release --example <name>` from the repository root.
+
+`openocd/` is a pre-compiled openocd taken from MounRiver's release (no license).
 
 ## Cyberlamp Bluetooth console
 
@@ -45,7 +54,7 @@ The pure parser checks can run on the host:
 
 ```sh
 rustc --edition 2021 --test --target x86_64-unknown-linux-gnu \
-  papajbadge-rs/src/cyberlamp_protocol.rs -o /tmp/cyberlamp-protocol-tests
+  cyberlamp-rs/src/protocol.rs -o /tmp/cyberlamp-protocol-tests
 /tmp/cyberlamp-protocol-tests
 ```
 
@@ -56,7 +65,7 @@ board, as in the Makefile's `toggle-3v3` target. Keep other BLE clients disconne
 and leave the physical controls untouched during this check.
 
 ```sh
-python analysis/test_cyberlamp_nus.py --power-cycle
+python analysis/test_cyberlamp_nus.py --power-cycle   # local tool, not in the repository
 ```
 
 Use UART and external BLE clients for debugging: debugger memory reads can hang
@@ -65,7 +74,7 @@ the running board.
 For intermittent faults, run the UART monitor before reproducing the problem:
 
 ```sh
-python -u analysis/monitor_cyberlamp_uart.py
+python -u analysis/monitor_cyberlamp_uart.py   # local tool, not in the repository
 ```
 
 It uses the WCH-Link's stable USB device ID, reconnects after USB replug, and writes
@@ -77,24 +86,24 @@ fault over UART, then halt. They do not blink the LED output-enable pin.
 
 ## BLE keyboard PoC on a second CH582 board
 
-`ble_hid_keyboard` is a separate firmware target. It advertises as
+`ble_hid_keyboard` is an example in `ch58x-rs-kit`. It advertises as
 `CH582-HID-PoC` using the chip's factory Bluetooth address. The active-low BOOT
 button on **PB22** sends one `A` key tap (normally the character `a`) per press.
 Holding the button does not repeat. Release BOOT after flashing; a button held
 at startup must be released before it can type. Change the pin in
-`papajbadge-rs/src/bin/ble_hid_keyboard.rs` if your board uses different wiring.
+`ch58x-rs-kit/examples/ble_hid_keyboard.rs` if your board uses different wiring.
 
 Build the USB-flashable image from the repository root:
 
 ```sh
-sh analysis/build_ble_hid_keyboard.sh
+sh analysis/build_ble_hid_keyboard.sh   # local tool, not in the repository
 ```
 
 On the **second board**, unplug USB, hold BOOT, plug USB back in, then release
 BOOT. Flash manually from the repository root:
 
 ```sh
-wchisp flash target/riscv32imc-unknown-none-elf/release/ble_hid_keyboard.bin
+wchisp flash target/riscv32imc-unknown-none-elf/release/examples/ble_hid_keyboard.bin
 ```
 
 Pair `CH582-HID-PoC` in the operating system's Bluetooth settings, open a text
@@ -112,14 +121,13 @@ PnP identity, and a fixed 100% Battery Level for this USB-powered PoC. Its servi
 layout follows [HID over GATT](https://www.bluetooth.com/specifications/specs/hid-over-gatt-profile-1-0/).
 The current HAL does not persist bond keys to flash. After a power cycle or
 reflash, forget/remove the device on the host and pair it again if reconnect fails.
-The PoC also uses the raw polling executor and the local HAL's SysTick return-state
-fix described in `analysis/new-stack-handover.md`.
+The PoC also uses the raw polling executor.
 
 The build and these host checks can run without either board connected:
 
 ```sh
 rustc --edition 2021 --test --target x86_64-unknown-linux-gnu \
-  papajbadge-rs/src/bin/ble_hid_keyboard/keyboard.rs -o /tmp/ble-hid-keyboard-tests
+  ch58x-rs-kit/examples/ble_hid_keyboard/keyboard.rs -o /tmp/ble-hid-keyboard-tests
 /tmp/ble-hid-keyboard-tests
 ```
 
@@ -150,12 +158,7 @@ On Nix(OS), `nix-shell` to use `shell.nix`.
 
 Final firmware: `cargo build --release --bin cebula_fw`
 
-Additional targets may be found in `papajbadge-rs/src/bin` directory.
-
-Use `--release`, due to PAC bug, debug builds are unable to set some board parameters,
-and are stuck with default 12 MHz clock, rendering bluetooth and serial output useless.
-
-GDB may still be used with debug builds.
+Other firmware and examples are listed in the table at the top.
 
 ### Flashing as the WCH intended (via USB)
 
@@ -177,7 +180,7 @@ Connect the device, and call `make mcu-unlock`
 
 `wlink -v flash <BINARY>`
 
-example: `wlink flash ../target/riscv32imac-unknown-none-elf/release/cebula_fw`
+example: `wlink flash target/riscv32imc-unknown-none-elf/release/cebula_fw`
 
 You may need to unlock the chip first. 
 
@@ -255,7 +258,10 @@ You may also customize yout workflow with .cargo/config.toml.
         - [ ] listen to meme adv packets
 
 
-## Debug build issues
+## Debug build issues (fixed)
+
+Fixed in the ch58x-hal fork: `safe_modify` / `safe_write` do the protected store in a fixed
+`asm!` sequence, so debug builds now set up clocks correctly. Original analysis:
 
 This seems to be because `with_safe_access` is broken on debug builds. Its intent is to use some cursed hardware peripheral functionality where some registers are 'protected' and must be written in a very special dance alongside some other pokes to other MMIO, within some window of time. Debug builds create very blown up mutation lambdas that seem to blow over that cycle/time budget.
 

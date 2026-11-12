@@ -1,7 +1,0 @@
-[package]
-name = "playground"
-version = "0.1.0"
-edition = "2021"  # Use stable edition for broader compatibility
-
-[dependencies]
-abc-note-stream = { git = "https://github.com/rough-rat/abc-note-stream" }

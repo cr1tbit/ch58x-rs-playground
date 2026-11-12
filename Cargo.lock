@@ -8,6 +8,24 @@ version = "0.1.0"
 source = "git+https://github.com/rough-rat/abc-note-stream#9f72509809c04dcf5f5b21c71ebe302bebf6b3bd"
 
 [[package]]
+name = "artsywatch-rs"
+version = "0.1.0"
+dependencies = [
+ "ch58x-hal",
+ "ch58x-rs-kit",
+ "critical-section",
+ "embassy-executor",
+ "embassy-futures",
+ "embassy-sync",
+ "embassy-time",
+ "embedded-hal 1.0.0",
+ "ledface_layout",
+ "postcard",
+ "qingke",
+ "qingke-rt",
+]
+
+[[package]]
 name = "atomic-polyfill"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -69,6 +87,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "ch58x-rs-kit"
+version = "0.1.0"
+dependencies = [
+ "abc-note-stream",
+ "ch58x-hal",
+ "critical-section",
+ "embassy-executor",
+ "embassy-futures",
+ "embassy-sync",
+ "embassy-time",
+ "embassy-time-driver",
+ "embedded-hal 1.0.0",
+ "qingke",
+ "qingke-rt",
+ "spi-memory",
+]
+
+[[package]]
 name = "cobs"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -82,6 +118,22 @@ name = "critical-section"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
+
+[[package]]
+name = "cyberlamp-rs"
+version = "0.1.0"
+dependencies = [
+ "ch58x-hal",
+ "ch58x-rs-kit",
+ "critical-section",
+ "embassy-executor",
+ "embassy-futures",
+ "embassy-sync",
+ "embassy-time",
+ "embedded-hal 1.0.0",
+ "qingke",
+ "qingke-rt",
+]
 
 [[package]]
 name = "darling"
@@ -116,38 +168,6 @@ dependencies = [
  "darling_core",
  "quote",
  "syn 2.0.106",
-]
-
-[[package]]
-name = "defmt"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "548d977b6da32fa1d1fda2876453da1e7df63ad0304c8b3dae4dbe7b96f39b78"
-dependencies = [
- "bitflags",
- "defmt-macros",
-]
-
-[[package]]
-name = "defmt-macros"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d4fc12a85bcf441cfe44344c4b72d58493178ce635338a3f3b78943aceb258e"
-dependencies = [
- "defmt-parser",
- "proc-macro-error2",
- "proc-macro2",
- "quote",
- "syn 2.0.106",
-]
-
-[[package]]
-name = "defmt-parser"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10d60334b3b2e7c9d91ef8150abfb6fa4c1c39ebbcf4a81c2e346aad939fee3e"
-dependencies = [
- "thiserror",
 ]
 
 [[package]]
@@ -434,26 +454,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
 
 [[package]]
-name = "papajbadge-rs"
+name = "papajbadge"
 version = "0.2.136"
 dependencies = [
  "abc-note-stream",
  "ch58x-hal",
+ "ch58x-rs-kit",
  "critical-section",
- "defmt",
  "embassy-executor",
  "embassy-futures",
  "embassy-sync",
  "embassy-time",
- "embassy-time-driver",
  "embedded-hal 1.0.0",
- "fugit",
- "ledface_layout",
- "nb 1.1.0",
- "postcard",
  "qingke",
  "qingke-rt",
- "spi-memory",
 ]
 
 [[package]]
@@ -509,28 +523,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "version_check",
-]
-
-[[package]]
-name = "proc-macro-error-attr2"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96de42df36bb9bba5542fe9f1a054b8cc87e172759a1868aa05c1f3acc89dfc5"
-dependencies = [
- "proc-macro2",
- "quote",
-]
-
-[[package]]
-name = "proc-macro-error2"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11ec05c52be0a07b08061f7dd003e7d7092e0472bc731b4af7bb1ef876109802"
-dependencies = [
- "proc-macro-error-attr2",
- "proc-macro2",
- "quote",
- "syn 2.0.106",
 ]
 
 [[package]]
