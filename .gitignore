@@ -4,3 +4,6 @@
 **/*.hex
 
 **/periph_hid_example/
+
+# local investigation notes, not published
+/analysis/

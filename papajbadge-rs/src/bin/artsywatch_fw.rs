@@ -135,10 +135,10 @@ async fn main(spawner: Spawner) -> ! {
     log!("  GPIO: OE=PA8, LAT=PA9");
 
     // Quick connectivity check before starting the main task.
-    sr_driver.test_write(0xFF);
-    sr_driver.test_write(0x00);
-    log!("Starting shift register background task...");
-    spawner.spawn(sr_driver_task(sr_driver)).unwrap();
+    // sr_driver.test_write(0xFF);
+    // sr_driver.test_write(0x00);
+    // log!("Starting shift register background task...");
+    // spawner.spawn(sr_driver_task(sr_driver)).unwrap();
 
     let rtc = get_configured_rtc();
 
@@ -154,10 +154,10 @@ async fn main(spawner: Spawner) -> ! {
     let (task_id, sub) = hal::ble::init(ble_config).unwrap();
     log!("BLE hal task id: {}", task_id);
 
-    loop {
-        Timer::after(Duration::from_secs(1)).await;
-        log!("Heartbeat: main alive");
-    }
+    // loop {
+    //     Timer::after(Duration::from_secs(1)).await;
+    //     log!("Heartbeat: main alive");
+    // }
 
     unsafe {
         common_init();

@@ -145,6 +145,25 @@ where
         self.enable_output();
     }
 
+    /// Shift the buffered frame into the registers and latch it, leaving `/OE` untouched.
+    ///
+    /// Much faster than [`Self::update`], so it can be used several times per PWM period
+    /// (e.g. to time-multiplex LED groups).
+    pub fn load_frame(&mut self) {
+        use embedded_hal_local::delay::DelayNs;
+
+        self.pack_frame();
+        let data = unsafe { &*self.spi_buf.get() };
+        let _ = self.spi.blocking_write(data);
+        // blocking_write returns once the FIFO is drained; let the last byte finish shifting
+        // out (8 us at the default 1 MHz) before latching.
+        let mut delay = hal::delay::CycleDelay;
+        delay.delay_us(10);
+        self.lat.set_high();
+        delay.delay_us(1);
+        self.lat.set_low();
+    }
+
     /// Helper used by [`Self::update`] to pack cells into the SPI buffer.
     fn pack_frame(&self) {
         let spi_buf = unsafe { &mut *self.spi_buf.get() };

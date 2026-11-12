@@ -7,6 +7,127 @@ It contains some nessesary mess:
  * vendored libs for bluetooth
  * ch58x pac - i had to patch TIM0 peripheral so it may be used for PWM output
 
+## Cyberlamp Bluetooth console
+
+`cyberlamp_fw` exposes the [Nordic UART Service](https://nrfconnectdocs.nordicsemi.com/ncs/latest/nrf/libraries/bluetooth/services/nus.html)
+for lamp commands. Connect to `21:37:04:20:69:96` with a BLE UART terminal or GATT
+client, enable notifications on TX, and write text to RX.
+
+| Attribute | UUID | Operation |
+| --- | --- | --- |
+| Service | `6E400001-B5A3-F393-E0A9-E50E24DCCA9E` | Discover |
+| RX | `6E400002-B5A3-F393-E0A9-E50E24DCCA9E` | Write / Write Without Response |
+| TX | `6E400003-B5A3-F393-E0A9-E50E24DCCA9E` | Notify |
+
+End each command with a newline; CRLF also works. Send one command and wait for
+its newline-terminated reply before sending the next.
+
+| Command | Effect |
+| --- | --- |
+| `brightness 20` | Set the current mode's brightness step, `0..40` (0 is off) |
+| `mix 20` | Set white colour mix, `0..40` (0 is cool, 40 is warm) |
+| `mode white` | Select `white`, `uv`, or `ir`; each remembers its own brightness |
+| `status` | Read mode, mix, current brightness, and all three per-mode brightness settings |
+| `help` | List commands |
+
+For example, writing `brightness 20\n` produces `OK brightness=20\n` on TX.
+Settings use the same two-second delayed DataFlash save as physical knob/button
+changes. `mix` configures the white mix even while another mode is selected.
+
+The current ATT MTU is 23: split writes into at most 20 bytes and join TX
+notifications until a newline arrives. Commands may span writes; a line may
+contain up to 64 bytes before its terminator. Invalid commands return `ERR ...`
+and leave settings unchanged. Disconnect clears partial lines and notification
+subscriptions; subscribe again after reconnecting. If RX is overrun (ATT error
+`0x11`), send a blank newline to resynchronize, then retry the command.
+
+The pure parser checks can run on the host:
+
+```sh
+rustc --edition 2021 --test --target x86_64-unknown-linux-gnu \
+  papajbadge-rs/src/cyberlamp_protocol.rs -o /tmp/cyberlamp-protocol-tests
+/tmp/cyberlamp-protocol-tests
+```
+
+On Linux, after flashing the board, the hardware check discovers NUS, exercises
+commands and notifications, and restores the initial settings. The optional power-cycle
+check verifies persistence by toggling the WCH-Link 3.3 V output on a probe-powered
+board, as in the Makefile's `toggle-3v3` target. Keep other BLE clients disconnected
+and leave the physical controls untouched during this check.
+
+```sh
+python analysis/test_cyberlamp_nus.py --power-cycle
+```
+
+Use UART and external BLE clients for debugging: debugger memory reads can hang
+the running board.
+
+For intermittent faults, run the UART monitor before reproducing the problem:
+
+```sh
+python -u analysis/monitor_cyberlamp_uart.py
+```
+
+It uses the WCH-Link's stable USB device ID, reconnects after USB replug, and writes
+timestamped rotating logs to `/tmp/cyberlamp-uart.log`. USB names such as
+`/dev/ttyACM0` can change when another adapter is connected. A background instance's
+PID is in `/tmp/cyberlamp-uart-monitor.pid`; stop that process before opening another
+UART reader. Panic and CPU exception handling disable LED output and report the
+fault over UART, then halt. They do not blink the LED output-enable pin.
+
+## BLE keyboard PoC on a second CH582 board
+
+`ble_hid_keyboard` is a separate firmware target. It advertises as
+`CH582-HID-PoC` using the chip's factory Bluetooth address. The active-low BOOT
+button on **PB22** sends one `A` key tap (normally the character `a`) per press.
+Holding the button does not repeat. Release BOOT after flashing; a button held
+at startup must be released before it can type. Change the pin in
+`papajbadge-rs/src/bin/ble_hid_keyboard.rs` if your board uses different wiring.
+
+Build the USB-flashable image from the repository root:
+
+```sh
+sh analysis/build_ble_hid_keyboard.sh
+```
+
+On the **second board**, unplug USB, hold BOOT, plug USB back in, then release
+BOOT. Flash manually from the repository root:
+
+```sh
+wchisp flash target/riscv32imc-unknown-none-elf/release/ble_hid_keyboard.bin
+```
+
+Pair `CH582-HID-PoC` in the operating system's Bluetooth settings, open a text
+editor, focus its input field, and press BOOT. Accept any host pairing dialog;
+the PoC uses Just Works pairing, so there is no passcode to enter on the board.
+Key reports require an encrypted connection and host notification subscription.
+The firmware sends key-down followed by an all-keys-up report after 40 ms;
+presses before the host is ready are discarded. The host keyboard layout and
+Caps Lock setting determine the resulting character. USB is only used for ROM
+flashing; the running firmware is a **Bluetooth** keyboard, not a USB keyboard.
+
+The service provides Report and Boot keyboard protocols, host LED output writes,
+HID Information/Report Map/Control Point, Device Information with a development
+PnP identity, and a fixed 100% Battery Level for this USB-powered PoC. Its service
+layout follows [HID over GATT](https://www.bluetooth.com/specifications/specs/hid-over-gatt-profile-1-0/).
+The current HAL does not persist bond keys to flash. After a power cycle or
+reflash, forget/remove the device on the host and pair it again if reconnect fails.
+The PoC also uses the raw polling executor and the local HAL's SysTick return-state
+fix described in `analysis/new-stack-handover.md`.
+
+The build and these host checks can run without either board connected:
+
+```sh
+rustc --edition 2021 --test --target x86_64-unknown-linux-gnu \
+  papajbadge-rs/src/bin/ble_hid_keyboard/keyboard.rs -o /tmp/ble-hid-keyboard-tests
+/tmp/ble-hid-keyboard-tests
+```
+
+These check boot-held-button suppression, debounce, one event per press, HID
+report lengths, and fragmented Report Map reads. Actual pairing, notification
+subscription and typed output require testing on the second board. The earlier
+unused `ble_periph/hid_service.rs` draft is not used by this target.
+
 ## Requirements
 
 You need WCH-LinkE probe - besides flashing/debugging via i-can't-belive-it's-not-SWD 
