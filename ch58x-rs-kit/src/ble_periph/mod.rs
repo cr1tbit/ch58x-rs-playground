@@ -44,28 +44,8 @@ const fn hi_u16(x: u16) -> u8 {
     (x >> 8) as u8
 }
 
-// GAP - SCAN RSP data (max size = 31 bytes)
-static mut SCAN_RSP_DATA: &[u8] = &[
-    // complete name
-    0x12, // length of this data
-    GAP_ADTYPE_LOCAL_NAME_COMPLETE,
-    b'P',
-    b'a',
-    b'p',
-    b'a',
-    b'j',
-    b'b',
-    b'a',
-    b'd',
-    b'g',
-    b'e',
-    b'-',
-    b'2',
-    b'1',
-    b'3',
-    b'6',
-    b'.',
-    b'9',
+// GAP - scan response: [complete local name] + SCAN_RSP_TAIL, built by `set_device_name`
+const SCAN_RSP_TAIL: &[u8] = &[
     // Connection interval range
     0x05,
     GAP_ADTYPE_SLAVE_CONN_INTERVAL_RANGE,
@@ -78,6 +58,36 @@ static mut SCAN_RSP_DATA: &[u8] = &[
     GAP_ADTYPE_POWER_LEVEL,
     0, // 0dBm
 ];
+
+/// Longest device name that fits into the scan response next to `SCAN_RSP_TAIL`
+/// (31 bytes). The GAP device name attribute takes up to `GAP_DEVICE_NAME_LEN` = 21 bytes.
+pub const MAX_DEVICE_NAME_LEN: usize = 20;
+const _: () = assert!(2 + MAX_DEVICE_NAME_LEN + SCAN_RSP_TAIL.len() <= 31);
+
+static mut SCAN_RSP: [u8; 31] = [0; 31];
+static mut SCAN_RSP_LEN: usize = 0;
+/// Copy of the name for the GAP device name attribute, zero-padded like the WCH SDK examples.
+static mut DEVICE_NAME: [u8; MAX_DEVICE_NAME_LEN + 1] = [0; MAX_DEVICE_NAME_LEN + 1];
+
+/// Name used by [`common_init`], kept for the boards that existed before names were configurable.
+pub const DEFAULT_DEVICE_NAME: &str = "Papajbadge-2136.9";
+
+unsafe fn set_device_name(name: &str) {
+    let name = name.as_bytes();
+    assert!(!name.is_empty() && name.len() <= MAX_DEVICE_NAME_LEN, "BLE device name: 1..=20 bytes");
+    SCAN_RSP[0] = name.len() as u8 + 1;
+    SCAN_RSP[1] = GAP_ADTYPE_LOCAL_NAME_COMPLETE;
+    SCAN_RSP[2..2 + name.len()].copy_from_slice(name);
+    SCAN_RSP[2 + name.len()..2 + name.len() + SCAN_RSP_TAIL.len()].copy_from_slice(SCAN_RSP_TAIL);
+    SCAN_RSP_LEN = 2 + name.len() + SCAN_RSP_TAIL.len();
+    DEVICE_NAME = [0; MAX_DEVICE_NAME_LEN + 1];
+    DEVICE_NAME[..name.len()].copy_from_slice(name);
+}
+
+#[allow(static_mut_refs)]
+unsafe fn scan_response() -> &'static [u8] {
+    &SCAN_RSP[..SCAN_RSP_LEN]
+}
 
 // const SIMPLEPROFILE_SERV_UUID: u16 = 0xFFE0;
 
@@ -111,10 +121,6 @@ static mut ADVERT_DATA: &[u8] = &[
     hi_u16(gatt_uuid::CURRENT_TIME_SERV_UUID),
 ];
 
-// GAP GATT Attributes
-// len = 21 GAP_DEVICE_NAME_LEN
-// max_len = 248
-static ATT_DEVICE_NAME: &[u8] = b"papajbadge gatt stuff";
 // let uid = hal::isp::get_unique_id();
 
 // System ID characteristic
@@ -261,8 +267,16 @@ pub unsafe fn devinfo_init() {
     }
 }
 
-/// GAP Role init
+/// GAP Role init, advertising as [`DEFAULT_DEVICE_NAME`].
 pub unsafe fn common_init() {
+    common_init_named(DEFAULT_DEVICE_NAME)
+}
+
+/// GAP Role init. `name` (at most [`MAX_DEVICE_NAME_LEN`] bytes) is advertised in the scan
+/// response and used as the GAP device name.
+#[allow(static_mut_refs)]
+pub unsafe fn common_init_named(name: &str) {
+    set_device_name(name);
     let _ = GAPRole::peripheral_init().unwrap();
 
     // Setup the GAP Peripheral Role Profile
@@ -271,8 +285,8 @@ pub unsafe fn common_init() {
         let _ = GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, 1, &true as *const _ as _);
         let _ = GAPRole_SetParameter(
             GAPROLE_SCAN_RSP_DATA,
-            SCAN_RSP_DATA.len() as _,
-            SCAN_RSP_DATA.as_ptr() as _,
+            scan_response().len() as _,
+            scan_response().as_ptr() as _,
         );
         let _ = GAPRole_SetParameter(GAPROLE_ADVERT_DATA, ADVERT_DATA.len() as _, ADVERT_DATA.as_ptr() as _);
     }
@@ -280,8 +294,8 @@ pub unsafe fn common_init() {
     // Set the GAP Characteristics
     let _ = GGS_SetParameter(
         GGS_DEVICE_NAME_ATT,
-        ATT_DEVICE_NAME.len() as _,
-        ATT_DEVICE_NAME.as_ptr() as _,
+        DEVICE_NAME.len() as _,
+        DEVICE_NAME.as_ptr() as _,
     );
 
     // Setup the GAP Bond Manager
@@ -395,12 +409,13 @@ unsafe fn configure_interactive_connection() {
 
     // Keep the scan response's preferred interval range consistent with the
     // actual connection update request. GAPRole copies this parameter's bytes.
+    let scan_rsp = scan_response();
     let mut response = [0u8; 31];
-    response[..SCAN_RSP_DATA.len()].copy_from_slice(SCAN_RSP_DATA);
+    response[..scan_rsp.len()].copy_from_slice(scan_rsp);
     let mut offset = 0;
-    while offset < SCAN_RSP_DATA.len() {
+    while offset < scan_rsp.len() {
         let len = response[offset] as usize;
-        assert!(len > 0 && offset + len < SCAN_RSP_DATA.len());
+        assert!(len > 0 && offset + len < scan_rsp.len());
         if len == 5 && response[offset + 1] == GAP_ADTYPE_SLAVE_CONN_INTERVAL_RANGE {
             response[offset + 2..offset + 4].copy_from_slice(&INTERACTIVE_MIN_CONN_INTERVAL.to_le_bytes());
             response[offset + 4..offset + 6].copy_from_slice(&INTERACTIVE_MAX_CONN_INTERVAL.to_le_bytes());
@@ -408,7 +423,7 @@ unsafe fn configure_interactive_connection() {
         }
         offset += len + 1;
     }
-    GAPRole_SetParameter(GAPROLE_SCAN_RSP_DATA, SCAN_RSP_DATA.len() as _, response.as_ptr() as _).unwrap();
+    GAPRole_SetParameter(GAPROLE_SCAN_RSP_DATA, scan_rsp.len() as _, response.as_ptr() as _).unwrap();
 }
 
 /// Called when a connection ends in [`peripheral`] mode, e.g. to enter a low-power loop.
