@@ -1,88 +1,29 @@
-# papajbadge-rs
+# ch58x-rs-playground
 
-Rust firmware for CH582 boards, built on [ch58x-hal](https://github.com/cr1tbit/ch58x-hal)
+Rust on WCH CH58x (CH582/CH583), built on [ch58x-hal](https://github.com/cr1tbit/ch58x-hal)
 (a fork with fixes for qingke-rt 0.5 / embassy 0.7).
 
-| Crate | Contents |
-| --- | --- |
-| `ch58x-rs-kit` | Shared library: UART logger, BLE peripheral services (NUS, current time, device info), settings storage, shift-register LED driver, fatal-error handler. `examples/` holds the PoCs (BLE HID keyboard, BLE scan/advertise tests, atomics litmus test, ...) |
-| `cyberlamp-rs` | Cyberlamp firmware (`cyberlamp_fw`) and its command protocol |
-| `artsywatch-rs` | Artsywatch firmware (`artsywatch_fw`), uses `ledface_layout` |
-| `papajbadge` | papajbadge firmware (`cebula_fw`), RTC sleep loop and tune playback |
-| `ledface_layout` | LED watch face layout format |
+- `ch58x-rs-kit`: shared library: UART logger, BLE peripheral services (NUS, current time,
+  device info), settings storage in DataFlash, shift-register LED driver, fatal-error handler
+- `ch58x-rs-kit/examples`: proof-of-concept firmware (BLE HID keyboard, BLE scan/advertise
+  tests, atomics litmus test, external interrupt test, audio player, ...). These are
+  experiments and not all of them are cleaned up.
 
-Run firmware with `cargo run --release --bin <name>` and examples with
-`cargo run --release --example <name>` from the repository root.
+Run an example with `cargo run --release --example <name>`.
+
+Firmware using the kit lives next to its hardware:
+[cyberlamp](https://github.com/cr1tbit/cyberlamp),
+[artsywatch](https://github.com/rough-rat/artsywatch),
+[papajbadge](https://github.com/rough-rat/papajbadge).
+Depend on the kit with:
+
+```toml
+ch58x-rs-kit = { git = "https://github.com/cr1tbit/ch58x-rs-playground.git", branch = "main" }
+```
 
 `openocd/` is a pre-compiled openocd taken from MounRiver's release (no license).
 
-## Cyberlamp Bluetooth console
-
-`cyberlamp_fw` exposes the [Nordic UART Service](https://nrfconnectdocs.nordicsemi.com/ncs/latest/nrf/libraries/bluetooth/services/nus.html)
-for lamp commands. Connect to `21:37:04:20:69:96` with a BLE UART terminal or GATT
-client, enable notifications on TX, and write text to RX.
-
-| Attribute | UUID | Operation |
-| --- | --- | --- |
-| Service | `6E400001-B5A3-F393-E0A9-E50E24DCCA9E` | Discover |
-| RX | `6E400002-B5A3-F393-E0A9-E50E24DCCA9E` | Write / Write Without Response |
-| TX | `6E400003-B5A3-F393-E0A9-E50E24DCCA9E` | Notify |
-
-End each command with a newline; CRLF also works. Send one command and wait for
-its newline-terminated reply before sending the next.
-
-| Command | Effect |
-| --- | --- |
-| `brightness 20` | Set the current mode's brightness step, `0..40` (0 is off) |
-| `mix 20` | Set white colour mix, `0..40` (0 is cool, 40 is warm) |
-| `mode white` | Select `white`, `uv`, or `ir`; each remembers its own brightness |
-| `status` | Read mode, mix, current brightness, and all three per-mode brightness settings |
-| `help` | List commands |
-
-For example, writing `brightness 20\n` produces `OK brightness=20\n` on TX.
-Settings use the same two-second delayed DataFlash save as physical knob/button
-changes. `mix` configures the white mix even while another mode is selected.
-
-The current ATT MTU is 23: split writes into at most 20 bytes and join TX
-notifications until a newline arrives. Commands may span writes; a line may
-contain up to 64 bytes before its terminator. Invalid commands return `ERR ...`
-and leave settings unchanged. Disconnect clears partial lines and notification
-subscriptions; subscribe again after reconnecting. If RX is overrun (ATT error
-`0x11`), send a blank newline to resynchronize, then retry the command.
-
-The pure parser checks can run on the host:
-
-```sh
-rustc --edition 2021 --test --target x86_64-unknown-linux-gnu \
-  cyberlamp-rs/src/protocol.rs -o /tmp/cyberlamp-protocol-tests
-/tmp/cyberlamp-protocol-tests
-```
-
-On Linux, after flashing the board, the hardware check discovers NUS, exercises
-commands and notifications, and restores the initial settings. The optional power-cycle
-check verifies persistence by toggling the WCH-Link 3.3 V output on a probe-powered
-board, as in the Makefile's `toggle-3v3` target. Keep other BLE clients disconnected
-and leave the physical controls untouched during this check.
-
-```sh
-python analysis/test_cyberlamp_nus.py --power-cycle   # local tool, not in the repository
-```
-
-Use UART and external BLE clients for debugging: debugger memory reads can hang
-the running board.
-
-For intermittent faults, run the UART monitor before reproducing the problem:
-
-```sh
-python -u analysis/monitor_cyberlamp_uart.py   # local tool, not in the repository
-```
-
-It uses the WCH-Link's stable USB device ID, reconnects after USB replug, and writes
-timestamped rotating logs to `/tmp/cyberlamp-uart.log`. USB names such as
-`/dev/ttyACM0` can change when another adapter is connected. A background instance's
-PID is in `/tmp/cyberlamp-uart-monitor.pid`; stop that process before opening another
-UART reader. Panic and CPU exception handling disable LED output and report the
-fault over UART, then halt. They do not blink the LED output-enable pin.
+This repository started as the papajbadge firmware (rough-rat/papajbadge-rs); its history is kept.
 
 ## BLE keyboard PoC on a second CH582 board
 
@@ -154,12 +95,6 @@ Requirements:
 
 On Nix(OS), `nix-shell` to use `shell.nix`.
 
-### Building
-
-Final firmware: `cargo build --release --bin cebula_fw`
-
-Other firmware and examples are listed in the table at the top.
-
 ### Flashing as the WCH intended (via USB)
 
 `wchisp flash <PATH>`. You must press "boot" button and reset power to enter ISP mode
@@ -180,7 +115,7 @@ Connect the device, and call `make mcu-unlock`
 
 `wlink -v flash <BINARY>`
 
-example: `wlink flash target/riscv32imc-unknown-none-elf/release/cebula_fw`
+example: `wlink flash target/riscv32imc-unknown-none-elf/release/examples/ble_adv_test`
 
 You may need to unlock the chip first. 
 
@@ -210,52 +145,6 @@ Currently I'm using makefiles, but in the end, i'd like to keep the environment
 rust-centric.
 
 You may also customize yout workflow with .cargo/config.toml.
-
-
-## Progress
-
-- [x] environment
-    - [x] extract required files from https://github.com/ch32-rs/ch58x-hal to this repo
-    - [x] fix TIM0 SVD description
-    - [x] prepare gdb environment
-    - [x] Logs via UART
-- [ ] board bringup
-    - [x] check if bluetooth works at all
-    - [x] run PoC PWM output
-    - [ ] PWM + DMA for audio output (TIM0 DOES NOT WORK WITH DMA)
-    - [x] speaker (works but requires manual rework, full power bootloops the device)
-    - [ ] power
-        - [ ] check power consumption + sleep modes
-            - [x] run (6mA @ 6mhz)
-            - [x] idle (1.6mA, agrees with datasheet)
-            - [x] halt (150-250uA, should be 320uA)
-            - [ ] sleep
-            - [ ] BT listen
-            - [ ] BT ADV
-            - [ ] BT connection
-        - [x] check CR2032/USB power XORing (removed in rev2)
-        - [x] check if LDO stable (removed in rev2)
-    - [x] clocks
-        - [x] check LSE (waveform visible without activating in code, probing glitches time counting without halting MCU)
-        - [x] check HSE (probing glitches UART baudrate)
-        - [x] check RTC (set/read works, counting works)
-    - [ ] onboard flash
-        - [x] chip ID + read
-        - [ ] write
-        - [ ] DMA
-    - [ ] SD card
-    - [x] bluetooth
-        - [x] run BLE connection (using examples from hal)
-        - [x] run bluetooth scan/ADV reception 
-- [ ] firmware
-    - [x] integrate embassy async
-    - [ ] UART not working in debug builds (clock not settable in debug other than 6mhz)
-    - [x] UART logging
-    - [ ] bluetooth features
-        - [x] peripheral PoC
-        - [x] set RTC from BLE (almost working, but RTC cannot be set from callback context(?))
-        - [ ] badge-to-badge comm
-        - [ ] listen to meme adv packets
 
 
 ## Debug build issues (fixed)
