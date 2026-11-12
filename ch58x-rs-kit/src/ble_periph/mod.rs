@@ -461,6 +461,16 @@ pub fn set_advertising(enabled: bool) {
     }
 }
 
+/// Advertising interval in 0.625 ms units, see [`set_advertising_interval`].
+static ADV_INTERVAL: core::sync::atomic::AtomicU16 = core::sync::atomic::AtomicU16::new(32); // 20 ms
+
+/// Advertising interval in 0.625 ms units (32 = 20 ms, the default; 1600 = 1 s). Used when
+/// advertising starts and after a disconnect. Call before [`peripheral`] or
+/// [`peripheral_keep_running`]. Longer intervals save power on battery-powered boards.
+pub fn set_advertising_interval(interval: u16) {
+    ADV_INTERVAL.store(interval, core::sync::atomic::Ordering::Relaxed);
+}
+
 /// Set by [`peripheral_keep_running`]: mains-powered devices restart advertising when the
 /// discoverable period ends, instead of going silent to save power.
 static KEEP_ADVERTISING: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
@@ -482,7 +492,7 @@ async fn peripheral_inner(
         static mut LAST_STATE: gapRole_States_t = GAPROLE_INIT;
 
         // time units 625us
-        const DEFAULT_FAST_ADV_INTERVAL: u16 = 32;
+        let adv_interval = ADV_INTERVAL.load(core::sync::atomic::Ordering::Relaxed);
         const DEFAULT_FAST_ADV_DURATION: u16 = 30000;
 
         const DEFAULT_SLOW_ADV_INTERVAL: u16 = 1600;
@@ -508,8 +518,8 @@ async fn peripheral_inner(
                     log!("BLE disconnected: reason=0x{:02x}", event.linkTerminate.reason);
                 }
                 // link loss -- use fast advertising
-                let _ = GAP_SetParamValue(TGAP_DISC_ADV_INT_MIN, DEFAULT_FAST_ADV_INTERVAL);
-                let _ = GAP_SetParamValue(TGAP_DISC_ADV_INT_MAX, DEFAULT_FAST_ADV_INTERVAL);
+                let _ = GAP_SetParamValue(TGAP_DISC_ADV_INT_MIN, adv_interval);
+                let _ = GAP_SetParamValue(TGAP_DISC_ADV_INT_MAX, adv_interval);
                 let _ = GAP_SetParamValue(
                     TGAP_GEN_DISC_ADV_MIN,
                     if KEEP_ADVERTISING.load(core::sync::atomic::Ordering::Relaxed) {
@@ -554,8 +564,8 @@ async fn peripheral_inner(
 
                 ptr::copy(system_id.as_ptr(), SYSTEM_ID.as_mut_ptr(), 8);
 
-                let _ = GAP_SetParamValue(TGAP_DISC_ADV_INT_MIN, DEFAULT_FAST_ADV_INTERVAL);
-                let _ = GAP_SetParamValue(TGAP_DISC_ADV_INT_MAX, DEFAULT_FAST_ADV_INTERVAL);
+                let _ = GAP_SetParamValue(TGAP_DISC_ADV_INT_MIN, adv_interval);
+                let _ = GAP_SetParamValue(TGAP_DISC_ADV_INT_MAX, adv_interval);
                 let _ = GAP_SetParamValue(
                     TGAP_GEN_DISC_ADV_MIN,
                     if KEEP_ADVERTISING.load(core::sync::atomic::Ordering::Relaxed) {
