@@ -24,3 +24,5 @@ embassy-time-driver.workspace = true
 [dev-dependencies]
 abc-note-stream.workspace = true
 spi-memory.workspace = true
+# sd_card example (embedded-hal 1.0 is the `embedded-hal-local` dependency)
+embedded-sdmmc = { version = "0.8", default-features = false }
