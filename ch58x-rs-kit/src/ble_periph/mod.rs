@@ -643,7 +643,15 @@ async fn peripheral_inner(
                         task_id,
                     )
                     .unwrap_or_else(|e| {
-                        log!("PeripheralConnParamUpdateReq error {:?}", e);
+                        // bleInvalidRange: the link already matches the request (interval
+                        // inside the range, same latency and timeout), so nothing to update.
+                        // Measured on a CH582 with WCH BLE lib 1.90; any change is accepted.
+                        const BLE_INVALID_RANGE: u8 = 0x18; // bleInvalidRange
+                        if e.get() == BLE_INVALID_RANGE {
+                            log!("Connection parameters already within the requested range");
+                        } else {
+                            log!("PeripheralConnParamUpdateReq error {:?}", e);
+                        }
                     });
 
                     // spawner.spawn(keypresser(conn_handle)).unwrap();
