@@ -9,9 +9,6 @@ use ch58x_hal::peripherals;
 use hal::uart::UartTx;
 use hal::rtc::{DateTime, Rtc};
 
-use ch58x_hal::ble::ffi::TMOS_SystemProcess;
-use embassy_time::{Duration, Ticker};
-use qingke_rt::highcode;
 
 pub mod helpers;
 pub mod logger;
@@ -25,17 +22,11 @@ pub mod fatal;
 static mut SERIAL: Option<UartTx<peripherals::UART0>> = None;
 
 
-#[highcode]
+/// No longer needed: `hal::embassy::Executor` runs the BLE stack (TMOS) whenever it has work
+/// (see `ch58x_hal::ble::stack`). Polling it every 300 µs kept the CPU awake ~3300 times a
+/// second. Kept so existing firmware still builds; spawning it does nothing.
 #[embassy_executor::task]
-pub async fn tmos_mainloop() {
-    let mut ticker = Ticker::every(Duration::from_micros(300));
-    loop {
-        ticker.next().await;
-        unsafe {
-            TMOS_SystemProcess();
-        }
-    }
-}
+pub async fn tmos_mainloop() {}
 
 pub fn get_configured_rtc() -> Rtc {
     let mut rtc = Rtc {};
@@ -56,10 +47,6 @@ pub fn get_configured_rtc() -> Rtc {
     rtc
 }
 
-#[qingke_rt::interrupt]
-fn RTC() {
-    Rtc.ack_timing();
-}
 
 
 #[panic_handler]
