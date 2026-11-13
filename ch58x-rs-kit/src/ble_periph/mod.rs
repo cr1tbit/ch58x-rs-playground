@@ -471,6 +471,21 @@ pub fn set_advertising_interval(interval: u16) {
     ADV_INTERVAL.store(interval, core::sync::atomic::Ordering::Relaxed);
 }
 
+/// Connection parameters requested after connecting, see [`set_connection_parameters`].
+static CONN_PARAMETERS: embassy_sync::blocking_mutex::Mutex<CriticalSectionRawMutex, core::cell::Cell<Option<(u16, u16, u16)>>> =
+    embassy_sync::blocking_mutex::Mutex::new(core::cell::Cell::new(None));
+
+/// Connection parameters the peripheral requests 0.5 s after a connection is made: interval
+/// range in 1.25 ms units and peripheral latency (connection events it may skip when idle).
+///
+/// Without this, [`peripheral_keep_running`] asks for 15..30 ms, latency 0 (responsive), and
+/// [`peripheral`] for 7.5 ms..4 s, latency 1, which lets the central pick intervals of seconds:
+/// a console then answers with that much delay. Call before starting the peripheral.
+pub fn set_connection_parameters(min_interval: u16, max_interval: u16, latency: u16) {
+    assert!(6 <= min_interval && min_interval <= max_interval && max_interval <= 3200);
+    CONN_PARAMETERS.lock(|p| p.set(Some((min_interval, max_interval, latency))));
+}
+
 /// Set by [`peripheral_keep_running`]: mains-powered devices restart advertising when the
 /// discoverable period ends, instead of going silent to save power.
 static KEEP_ADVERTISING: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
@@ -612,7 +627,9 @@ async fn peripheral_inner(
                     // 1600 * 625 us
                     Timer::after(Duration::from_millis(500)).await; // FIXME: spawn handler
 
-                    let (minimum, maximum, latency) = if use_legacy_power_behavior {
+                    let (minimum, maximum, latency) = if let Some(parameters) = CONN_PARAMETERS.lock(|p| p.get()) {
+                        parameters
+                    } else if use_legacy_power_behavior {
                         (DEFAULT_DESIRED_MIN_CONN_INTERVAL, DEFAULT_DESIRED_MAX_CONN_INTERVAL, DEFAULT_DESIRED_SLAVE_LATENCY)
                     } else {
                         (INTERACTIVE_MIN_CONN_INTERVAL, INTERACTIVE_MAX_CONN_INTERVAL, INTERACTIVE_SLAVE_LATENCY)
